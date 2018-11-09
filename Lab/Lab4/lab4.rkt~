@@ -1,0 +1,28 @@
+#lang racket #| CSC324 Fall 2018: Lab 4 |#
+
+;-------------------------------------------------------------------------------
+; ★ Task 1: Closures as objects ★
+;-------------------------------------------------------------------------------
+#|
+(Point x y)
+  x: an integer (representing the x-coordinate of the point)
+  y: an integer (representing the y-coordinate of the point)
+
+  Returns a function representing the *point* (x, y).
+  Read the given code carefully to see how the returned function expects to
+  be called, and experiment in the interpreter!
+
+|#
+(define (Point x y)
+  (lambda (attr)
+    (cond
+      [(equal? attr 'x) x]
+      [(equal? attr 'y) y]
+      [else (error (format "Point has no attribute ~a." attr))])))
+
+
+;-------------------------------------------------------------------------------
+; ★ Task 2: The attribute __dict__ ★
+;-------------------------------------------------------------------------------
+(define (PointHash x y)
+  (void))

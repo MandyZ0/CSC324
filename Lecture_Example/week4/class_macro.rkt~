@@ -1,0 +1,48 @@
+#lang racket
+
+
+(define-syntax my-class
+  (syntax-rules ()
+    [; Pattern (the code we want to write)
+     (my-class <class-name> (<attr> ...))
+     ; Template (the code we want to run)
+     (define (<class-name> <attr> ...)
+       (let* ([__dict__
+               (make-immutable-hash
+                (list (cons (quote <attr>) <attr>) ...
+
+                      ))])
+         (lambda (msg)
+           ; Look up the given message in the object's dictionary.
+           (hash-ref __dict__ msg
+                     ; Raise an error if the message is not found.
+                     (attribute-error (quote <class-name>) msg)))))
+     ]
+    ))
+
+
+; Return a function that raises an attribute error (with an appropriate message).
+(define (attribute-error object attr)
+  (lambda ()
+    (error (format "~a has no attribute ~a." object attr))))
+
+
+; Uses of the my-class macro.
+;(my-class Point (x y))
+;(my-class Person (name age likes-chocolate))
+
+(define (Point x y)
+  (let* ([__dict__ ; dictionary is a hash table contain x,y,scale
+          (make-immutable-hash
+           (list (cons 'x x)
+                 (cons 'y y)
+                 (cons 'scale
+                       (lambda (factor)
+                         (Point (* x factor) (* y factor))))))])
+    (lambda (msg)  ; this is what it will return, return a message
+      (hash-ref __dict__ msg
+                (attribute-error 'Point msg)))
+   )
+ )
+
+

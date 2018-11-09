@@ -1,0 +1,436 @@
+#lang racket #| ★ CSC324 Fall 2018: Assignment 1 ★ |#
+#|
+★ Before starting, please review the exercise guidelines at
+https://www.cs.toronto.edu/~david/csc324/homework.html ★
+
+The assignment handout can be found at
+https://www.cs.toronto.edu/~david/csc324/assignments/a1/handout.html
+|#
+; You may use the following imports, but you may not add any other imports.
+(require racket/hash)
+(require "plastic-errors.rkt")
+
+(provide run-interpreter)
+
+
+;-------------------------------------------------------------------------------
+; ★ Main interpreter function ★
+;-------------------------------------------------------------------------------
+#|
+(run-interpreter prog) 
+  prog: A datum representing a Plastic program.
+    Consult the assignment handout for the assumptions you can make about prog.
+
+  The main interpreter function.
+
+  Returns the value of the program, or raises an error reporting one of the
+  kinds of semantic errors you're responsible for on this assignment.
+
+  While we've provided some structure for this function already, you are free
+  to modify the implementation as you see fit (just don't change the public
+  behaviour).
+|#
+#|
+note: program = type-declaration + name-binding + expression
+there's no default type in our plastic program, so we need to define the type by ourselves
+after we have type, we need variable -> name binding
+then we have expression for evaluating sth -> get the value:
+
+<program> =
+   <type-declaration> ..1
+   <name-binding> ...
+   <expr>  (only one expression?)
+|#
+;prog = (list '(data Void = (V)) '(define x (V)) 'x)
+;list of datums!!!
+
+(define (run-interpreter prog)
+  ; Split up prog into the definitions and final expression to evaluate.
+  (let* ([definitions (drop-right prog 1)]       ; drop the last element: expression
+         [expr (last prog)]                      ; the last element is expression
+         [envs (build-envs definitions)]         ; build environment based on definitions
+         [type-env (first envs)]                 ; there are type env and value env
+         [value-env (second envs)])
+    (interpret type-env value-env expr)))
+
+(define (data-identifier? expr)
+  (and (symbol? expr)
+       (char-lower-case? (string-ref (symbol->string expr) 0))))
+
+;all identifiers used for type names and
+;constructor names must start with a capital letter; 
+(define (type-identifier? expr)
+  (and (symbol? expr)
+       (char-upper-case? (string-ref (symbol->string expr) 0))))
+
+;-------------------------------------------------------------------------------
+; ★ Parts 1 and 2: Building the environments ★
+;-------------------------------------------------------------------------------
+#|
+(build-envs definitions)
+  definitions: A list of datums representing either type declarations or name bindings.
+    Note: as specified by the assignment grammar, all type declarations will
+    appear before any name bindings.
+
+  Returns two hash tables (list type-env value-env), where the first hash table stores
+  type information, and the second stores name bindings.
+
+  We've started this off as two separate hash tables; however, because of the naming restrictions
+  we impose on the language, it's possible to store everything in just one dictionary,
+  as long as you're careful.
+|#
+#|
+input: a datum '(the prog without last expr)
+input a datum, match different type, use hash, immutable(ex3).
+output: a list contains two separate hash tables
+Example: definitions = '(data PairOfBools = (Pair Bool Bool))
+|#
+
+;prog = (list '(data Void = (V)) '(define x (V)) 'x)
+;definitions = (list '(data Void = (V)) '(define x (V)))
+
+;******I'LL LEARN PATTERN MATCHING!!!!!!*********
+
+
+(define fmap
+  (make-immutable-hash
+   (list (cons 'f (list 0))))
+  )
+;helperfunction foldhelp
+;foldl
+;input:  ex: (foldone 'SomeBools '(TwoBools Bool Bool))
+;      typename:'SomeBools
+;      one constructor: '(OneBool Bool)
+;output: '#hash((TwoBools . (SomeBools Bool Bool)))
+
+#|
+(define (foldone typename oneconstru)
+  (make-immutable-hash (list (cons (first oneconstru) (cons typename (rest oneconstru))))))
+
+(foldone 'SomeBools '(TwoBools Bool Bool))
+|#
+
+;curryfoldone
+;input: typename
+;output: a function that input: one-constructor, inithash to output a hash table:
+                                   ;'#hash((TwoBools . (SomeBools Bool Bool)))
+(define (curryfoldone typename)
+  (lambda (oneconstru inithash)
+    (hash-set inithash (first oneconstru) (cons typename (rest oneconstru)))))
+
+;((curryfoldone 'SomeBools) '(TwoBools Bool Bool) (make-immutable-hash))
+
+;helperfunction newtypehash:
+;input: old type hash table; type def: '((data SomeBools = (NoBools) (OneBool Bool) (TwoBools Bool Bool)))
+;output: new type hash table
+#|
+we want: #hash((NoBools. (SomeBools ())),
+                (OneBool. (SomeBools (Bool))),
+                (TwoBools. (SomeBools (Bool Bool)))
+
+;how to use foldl/foldr???
+***** NEED TO DO ERROR CHECKING*****
+(data Bool = (What)) ;it's invalid: typename appeared before -> duplicate-name
+(data TwoBool = (Pair AB CD)); it's invalid: if any paras (in consdefs) haven't appeared before -> unbound-name
+**********I FOUND IT!!!!!****
+> (map (lambda (lst) (first lst)) (hash-values (first myhash)))
+'(Bool Bool Bool TwoBool)
+
+|#
+
+#|
+Helper function for check duplicate:
+input:
+output: Boolean
+|#
+;(define (duplicate-name? hash typename consdefs)
+;  )
+
+;andmap: input: pred list
+;output: #t or #f
+;helper:
+;input: one list element
+;output boolean
+
+;mylogic: filter out a list, if it's equal to the original list, then it means all matched
+(define (unboundhelp oldtypehash)
+  (lambda (onedef initlist)
+    (append (filter-not (lambda (type-name) (list? (member type-name
+                    (map (lambda (lst) (first lst)) (hash-values oldtypehash)))))
+                    onedef) initlist))
+  )
+
+#;(lambda (x)
+      (equal? (filter (lambda (type-name) (list? (member type-name
+                    (map (lambda (lst) (first lst)) (hash-values oldtypehash)))))
+                    x) x)
+         )
+
+
+(define (findunbound type-name oldtypehash)
+  (lambda (onedef initlist)
+    (append (filter-not (lambda (type-name) (list? (member type-name
+                    (map (lambda (lst) (first lst)) (hash-values oldtypehash)))))
+                    onedef) initlist)))
+
+;(map (lambda (lst) (first lst)) (hash-values oldtypehash)): get all the typevalues
+(define/match (newtypehash oldtypehash typedef) 
+  [(oldtypehash (cons 'data (cons typename (cons '= consdefs))))
+   (println "typedef")
+   (println typedef)
+   (println "list of all typename (map (lambda (lst) (first lst)) (hash-values oldtypehash))")
+   (println (map (lambda (lst) (first lst)) (hash-values oldtypehash)))
+   (println "list of rest part of typedef (map (lambda (lst) (rest lst)) consdefs)")
+   (println (map (lambda (lst) (rest lst)) (reverse consdefs)))
+   (println "xxxxxxxxxxxx")
+  ;original code
+   ;(foldl (curryfoldone typename) oldtypehash consdefs)
+  ;the version going to update:
+   (cond
+     [(equal? (findf (lambda (arg) (equal? arg typename))
+                     (map (lambda (lst) (first lst)) (hash-values oldtypehash))) typename)
+      (report-error 'duplicate-name typename)]
+     ;[(not (andmap (andmaphelp oldtypehash) (map (lambda (lst) (rest lst)) consdefs))) (report-error 'unbound-name (foldl (findunbound typename )))]
+;(data TwoBool = (Pair Bool Bools)) -> Bools is invalid!
+; it's invalid: if any paras haven't appeared before -> unbound-name
+;so every para in consdefs nee
+     [else (foldl (curryfoldone typename) oldtypehash (reverse consdefs))])
+     ])
+
+;I'M ABLE TO return a hash map based on one whole type definition!!
+;next step is to fold all type definitions!
+;(newtypehash fmap '(data Boolean = (True) (False)))
+; #hash((True. (Boolean '())),
+;       (False. (Boolean '()))  )
+
+;we need filter for all typedef & iddef
+;input: definitions (typedef & iddef)
+(define (build-envs definitions)
+  (foldl buildenvfold (list (make-immutable-hash) (make-immutable-hash)) definitions)
+#|  [((list)) (let ([type-env (make-immutable-hash)]
+                  [value-env (make-immutable-hash)])
+              (list type-env value-env))]
+  [(definitions)
+   ;;(foldl buildenvfold (list (make-immutable-hash) (make-immutable-hash)) definitions)
+   
+   (cond
+     ;HAVEN'T FINISHED:ERROR-CHECKING!!!! 'unbound-name & 'duplicate-name
+     ;need to check the type of parameters
+     ;
+     [(type-identifier? (second first-def)) ;check whether it's type-def
+      (list (newtypehash (first (build-envs rest-defs)) first-def) (second (build-envs rest-defs)))]
+;HAVEN'T FINISHED:
+     ;To complete the implementation of build-envs and return
+     ;a Plastic program’s name bindings in value-env,
+     ;our interpreter must support the evaluation of expressions.
+     ;So we will start by building an interpreter that is able to interpret simple expressions
+     ;(everything except case-lambdas). 
+     [(data-identifier? (second first-def))
+      (list (first (build-envs rest-defs)) (hash-set (second (build-envs rest-defs))
+                                               (second first-def) (last first-def)))])
+   ]|#
+
+  )
+;output: new hash list
+(define (buildenvfold onedef inithashlist)
+  (cond
+  [(type-identifier? (second onedef)) (list (newtypehash (first inithashlist) onedef) (second inithashlist))]
+  [(data-identifier? (second onedef))
+      (list (first inithashlist) (hash-set (second inithashlist)
+                                               (second onedef) (last onedef)))]
+  ))
+;****** I haven't check any duplicate or blablabla!!!****
+;      unbound-name
+;      duplicate-name
+;***********CHECK TIME!!!!!!****************
+(define myhash (build-envs '((data Bool = (True) (False))
+              (data Null = (Empty)) ;it's invalid: if the first item of the value appeared before -> duplicate-name
+              (data TwoBools = (Pair Bools Bool))
+              (data ThreeBools = (Three Bool Bool Bool)); it's invalid: if any paras haven't appeared before -> unbound-name
+              (define x (True)))))
+(define alltypename (map (lambda (lst) (first lst)) (hash-values (first myhash))))
+alltypename
+;(newtypehash (first myhash) '(data Bool = (True))) 
+; TODO: these bindings are placeholders, and should be updated!
+;we need to call build-envs recursively)(
+#|
+   (define rdef (reverse definitions))
+    (cond
+      [(null? rdef)
+         (let* ([type-env (make-immutable-hash)]
+                [value-env (make-immutable-hash)])
+       (list type-env value-env))]
+      [else
+       (let (
+             [first-def (first rdef)]
+             [rest-environment (build-envs (rest rdef))])
+             (cond
+               [(type-identifier? (car(cdr first-def)))
+                  (list (hash-set (car rest-environment)
+                            (car(cdr first-def)) (last first-def)) (cdr rest-environment))]
+               [(data-identifier? (car(cdr first-def)))
+                  (list (first rest-environment) (hash-set (first(last rest-environment))
+                            (car(cdr first-def)) (first(last first-def))))]
+               ))])
+|#
+
+
+#|
+Two errors can occur:
+
+|#
+;-------------------------------------------------------------------------------
+; ★ Parts 3-4: The actual interpreter ★
+;-------------------------------------------------------------------------------
+#|
+(interpret type-env value-env expr)
+  type-env: type environment (a hash table)
+  value-env: name bindings (a hash table)
+  expr: the expression to evaluate
+
+  Returns the result of evaluating expr in the given type and name environment.
+|#
+(define (interpret type-env value-env expr)
+  (void))
+
+
+;-------------------------------------------------------------------------------
+; ★ Part 3: Implementing pattern-matching ★
+;-------------------------------------------------------------------------------
+#|
+(pattern-match patterns values)
+   patterns: one or more patterns
+   values: one or more values
+
+   Returns a hash table containing the name bindings on a successful match,
+   and #f otherwise.
+|#
+(define (pattern-match patterns values)
+  (void))
+
+
+;-------------------------------------------------------------------------------
+; ★ Part 4: Runtime type-checking ★
+;-------------------------------------------------------------------------------
+; Please put your main work for Part 4 here. (Makes it easier for your TAs to find.)
+
+
+;-------------------------------------------------------------------------------
+; ★ General helpers (feel free to add to these here, or below) ★
+;-------------------------------------------------------------------------------
+
+(define (case-lambda? v)
+  (and (list? v)
+       (not (empty? v))
+       (equal? (first v) 'case-lambda)))
+
+(define (get-case-pattern rule)
+  ; get the pattern portion of a case-lambda rule
+  ; e.g. (get-case-pattern '(a b -> c)) returns '(a b)
+  (drop-right rule 2))
+(define (get-case-body rule)
+  ; get the body portion of a case-lambda rule
+  ; e.g. (get-case-pattern '(a b -> c)) returns 'c
+  (last rule))
+
+;-------------------------------------------------------------------------------
+; ★ Sample tests (please add to these!) ★
+;-------------------------------------------------------------------------------
+(module+ test
+  ; This first part creates some definition datums, useful for testing purposes.
+
+  ;'(data Void = (V)))
+  ; [data]: declare a new type
+  ; [type-name]: Void   **start with a capital letter
+  ;[constructor-definition]: (V) creating values of that type.
+  ;**Each constructor definition consists of a name (for the constructor)
+  ;followed by zero or more type names, which specify the arguments to
+  ;that constructor. 
+
+  
+  ; A type named Void with one nullary constructor V.
+  ;**constructors can be nullary (i.e., take zero arguments)
+  (define defn-Void '(data Void = (V)))
+
+  ; The familiar boolean type, which has exactly two values.
+  (define defn-Bool '(data Bool = (True) (False)))
+
+  ; An *enumeration type* like Bool is a type whose constructors are all nullary.
+  ; Here's another example of an enumeration type.
+  (define defn-Day '(data Day = (Mon) (Tue) (Wed) (Thu) (Fri) (Sat) (Sun)))
+
+  ; Here is a type representing a pair of booleans.
+  (define defn-PairOfBools '(data PairOfBools = (Pair Bool Bool)))
+
+  ; Here is a complex type representing either zero, one, or two booleans.
+  (define defn-SomeBools
+    '(data SomeBools =
+           (NoBools)
+           (OneBool Bool)
+           (TwoBools Bool Bool)))
+  ;Each constructor definition consists of a name (for the constructor)
+  ;followed by zero or more type names, which specify the arguments to
+  ;that constructor. 
+
+  ; Here is a recursive "list of booleans" type.
+  (define defn-ListOfBools
+    '(data ListOfBools =
+           (Empty)
+           (Cons Bool ListOfBools)))
+  
+  ; ======================
+  ; We use the define keyword to bind global names to values
+  #|Eagerly evaluated:
+1.Evaluate the <expr> in the current environment.
+2.Update the current environment to bind the LOWERCASE-ID
+to the value of <expr>.
+
+This means that every binding is evaluated,
+even if the name is not used anywhere in the program.
+Like type declarations, name bindings are evaluated in top-down order,
+and attempting to evaluate a name before it is bound
+is also a semantic error.
+|#
+  (define defn-identity
+    '(define identity (case-lambda [x -> x])))
+  (define defn-not
+    '(define not (case-lambda [(True) -> (False)]
+                              [(False) -> (True)])))
+  (define defn-and       ; define action(and) in plastic language
+    '(define and (case-lambda [(True) (True) -> (True)]
+                              [_ _ -> (False)])))
+  (define defn-pair-and  
+    '(define pair-and (case-lambda [(Pair (True) (True)) -> (True)]
+                                   [(Pair _ _) -> (False)]))))
+#|
+Expressions:
+There are only three kinds of expressions in the Plastic language:
+identifiers, function calls, and case-lambdas.
+
+<expr> = LOWERCASE-ID                   # identifier
+       | <case-lambda>                  # pattern-matching function
+            this is an expression representing an
+            anonymous pattern-matching function,
+            similar to Racket’s match-lambda*.
+       | ( <expr> <expr> ... )          # case-lambda call
+        function call   arguments       #   (the first <expr> is the function expression,
+                                        #   then come zero or more function arguments)
+       | ( CAPITALIZED-ID <expr> ... )  # constructor call
+|#
+
+; Sample tests actually start here. Uncomment when ready.
+#;(module+ test
+    (require rackunit)
+    (test-equal? "Single void"
+                 (run-interpreter (list defn-Void '(V)))
+                 '(V))
+    (test-equal? "Void with lookup"
+                 (run-interpreter (list defn-Void '(define x (V)) 'x))
+                 '(V))
+ (test-exn "Error: unbound identifier (lowercase)"
+            (regexp (format "Error: identifier ~a could not be found." 'blah))
+            (thunk (run-interpreter (append definitions (list 'blah)))))
+   (test-exn "Error: unbound identifier (capitalized)"
+            (regexp (format "Error: identifier ~a could not be found." 'Blah))
+            (thunk (run-interpreter (append definitions (list '(Blah))))))
+)
