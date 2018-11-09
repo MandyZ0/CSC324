@@ -107,6 +107,11 @@
 
   You might want to lookup the "build-list" function.
 |#
+
+(define/match (list-of-one n)
+  [(0) '()]
+  [(_) (cons 1 (list-of-one (- n 1)))])
+
 (define (make-change n)
   (void))
 
