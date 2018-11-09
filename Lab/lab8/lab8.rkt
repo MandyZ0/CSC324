@@ -112,12 +112,16 @@
   [(0) '()]
   [(_) (cons 1 (list-of-one (- n 1)))])
 
+;helper funcition like 'rule' for combining
+(define (combine-with-five)
+  (lambda (lst) (append (list 5) lst)))
+
 (define (make-change n)
-  (void))
+  (cond
+    [(< n 5) (-<(list-of-one n))]
+    [else (-< ((combine-with-five) (make-change (- n 5)))
+              (list-of-one n))]))
 
-
-(module+ test
-  (require rackunit)
   (require (only-in racket/control prompt))
 
   ; Helper to access all choices
@@ -135,6 +139,10 @@
       (if (done? v)
           empty
           (cons v (remaining-choices)))))
+
+(module+ test
+  (require rackunit)
+
 
   (test-equal? "make-change 0"
                (list->set (all-choices (make-change 0)))
@@ -165,30 +173,47 @@
   *call (next)*. (This is useful inside recursive calls.)
   But return an *empty list* if n = 0. These are different cases!
 
+//coins: list of numbers
+
   Notes:
     1. We have started the pattern-matching for you, and strongly recommend building
        off of these patterns.
     2. You might need to have the output choices come out in a different order
        than in `make-change`. That's fine!
 |#
+
+(define (list-of-coin coin n)
+  (cond
+    [(equal? n 0) '()]
+    [else (cons coin (list-of-coin coin (- n coin)))]))
+
+(define (combine-with-coin coin)
+  (lambda (lst) (append (list coin) lst)))
+
 (define/match (make-change-gen coins n)
   ; If n = 0, return an empty list.
-  [(_ 0) (void)]
+  [(_ 0) '()]
 
   ; If there are no more coins to choose from, backtrack by calling (next).
-  [((list) _) (void)]
+  [((list) _) (next)]
 
   ; If there's just one coin value, think about what to do here!
-  [((list coin) _) (void)]
+  [((list coin) _)
+   (cond [(equal? (remainder n coin) 0) (-<(list-of-coin coin n))]
+         [else (next)])] ;here has some problem of whether put next in the funciton or outside
 
   ; If there's more than one coin value, choose one of:
   ;   - a combination of (rest coins) whose sum is n
   ;   - a combination of coins whose sum is (- n (first coins)), together with
   ;     an occurrence of (first coins)
-  [((cons first-coin rest-coins) _) (void)])
+  [((cons first-coin rest-coins) _)
+   (cond
+     [(< n first-coin) (make-change-gen rest-coins n)]
+     [else (-< ((combine-with-coin first-coin) (make-change-gen coins (- n first-coin)))
+               (make-change-gen rest-coins n))])])
 
 
-#;(module+ test
+(module+ test
   (test-equal? "make-change-gen (10 3) 13"
                (list->set (all-choices (make-change-gen (list 10 3) 13)))
                (set (list 10 3)))
