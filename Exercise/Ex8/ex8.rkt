@@ -294,7 +294,16 @@ the total number of choices made when solving Sudoku boards.
   will have an *empty* set of possible values.
 |#
 (define (initialize-constraints board)
-  (void))
+  (initialize-constraints-helper board 0))
+
+
+(define (initialize-constraints-helper board i)
+  (cond
+    [(>= i (vector-length board)) '()]
+    [else
+     (append (list (list i (get-constraints board i))) (initialize-constraints-helper board (+ 1 i)))]
+
+    ))
 
 
 #|
@@ -339,7 +348,39 @@ the total number of choices made when solving Sudoku boards.
   do it here.
 |#
 (define (update-constraints constraints i choice)
-  (void))
+  (let* ([same-col-idx (remove i (filter (lambda (x) (same-column? x i)) (range 81)))]
+         [same-row-idx (remove i (filter (lambda (x) (same-row? x i)) (range 81)))]
+         [same-subsquare-idx (remove i (filter (lambda (x) (same-subsquare? x i)) (range 81)))]
+         [same-all-idx (append same-col-idx same-row-idx same-subsquare-idx)]
+         ;the list only contain idx updated constraint
+         [updated-same-all-idx-lst (map (update-constraints-each constraints choice) same-all-idx)]
+         )
+    ())
+  )
+
+;helper for each
+(define/match (update-constraints-each constraints choice)
+  [('() choice) '()]
+  [((cons first-constraint rest-constraints) choice)
+   (lambda (idx)
+    (let*([considx (first first-constraint)]
+          [consset (second first-constraint)])
+      (if (equal? idx considx)
+          ;we need to update
+          (let ([newconsset (set-remove consset choice)])
+            (if (set-empty? newconsset)
+                (next)
+                (list considx newconsset)))
+          (update-constraints-each rest-constraints choice)
+          )
+      )
+    )]
+  )
+
+;helper for update whole list
+(define/match (update-constraints-each-constraint constraint choice)
+  [(cons considx (cons consset '()) choice)
+   (if (equal? ))])
 
 
 #|
