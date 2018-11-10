@@ -12,8 +12,6 @@ Also, you may not change streams.rkt and stack_choice.rkt (you won't be able
 to submit those files; we'll use our own for testing purposes).
 ★
 |#
-(require (only-in racket/control prompt))
-
 (provide solve-with-constraints
          with-constraints-helper
          get-constraints
@@ -63,7 +61,6 @@ to submit those files; we'll use our own for testing purposes).
 
 
 ; Utilities for getting the set of elements in a column/row/subsquare.
-; //i is the first element of row or column
 (define (column board i)
   (list->set (map (lambda (j) (vector-ref board (+ i (* 9 j)))) (range 9))))
 
@@ -103,7 +100,7 @@ to submit those files; we'll use our own for testing purposes).
 ; We've provided an optional argument to turn on logging.
 ; This may be useful for debugging purposes, or to see how many steps your
 ; algorithm is taking.
-(define (vector-set vec index new-item [logging #t])
+(define (vector-set vec index new-item [logging #f])
   (when logging
     (displayln (format "Index: ~a Choice: ~a" index new-item)))
 
@@ -167,53 +164,27 @@ Complete the two helpers `get-constraints` and `set->choice`, and then modify
 `with-constraints-helper` to replace the (-< 1 2 3 4 5 6 7 8 9) expression.
 (You can change other things as well, although you shouldn't need to change much.)
 |#
-
-;helper function for subtraction in set
-(define (subtract xs ys)
-  (if (set-empty? ys)
-      xs
-      (subtract (set-remove xs (set-first ys)) (set-rest ys))))
-
 (define (solve-with-constraints board) (with-constraints-helper board 0))
 
 (define (with-constraints-helper board i)
-  ;(displayln (format "constraints helper: index: ~a" i))
   (cond
     ; If there are no more choices to make, check if the puzzle is actually solved.
     [(>= i (vector-length board))
      (if (solved? board)
-         
-          ;(displayln (format "constraints helper: SLOVED!!"))
-          board
-         
-          ;(displayln (format "constraints helper: NOOOOOT SLOVED!!"))
-          (next))]
+         board
+         (next))]
 
     ; If the current cell is occupied, move on to the next cell.
     [(not (blank? board i))
-     ;(displayln (format "constraints helper: call next index"))
      (with-constraints-helper board (+ i 1))]
 
     ; Else, the current cell is empty. Make a new choice!
     [else
-     ;(displayln (format "constraints helper: get choices of the blank cell"))
-     (let* ( [choice (set->choice (get-constraints board i))]
-             [new-board (vector-set board i choice)])
-       ;(displayln (format "constraints helper: get new-board"))
+     (let* ([choice (-< 1 2 3 4 5 6 7 8 9)]
+            [new-board (vector-set board i choice)])
        (with-constraints-helper new-board (+ i 1)))]))
-(define-syntax all-choices
-    (syntax-rules ()
-      [(all-choices <expr>)
-       (begin
-         ; Technical hack to add <expr> to the choices stack.
-         (prompt (-< (void) <expr>))
-         (remaining-choices))]))
 
-  (define (remaining-choices)
-    (let* ([v (prompt (next))])
-      (if (done? v)
-          empty
-          (cons v (remaining-choices)))))
+
 #|
 (get-constraints board i)
   board: A Sudoku board.
@@ -228,15 +199,7 @@ Complete the two helpers `get-constraints` and `set->choice`, and then modify
   for when `i` refers to an occupied cell in the board.
 |#
 (define (get-constraints puzzle i)
-  ;(displayln (format "constraints helper -- call -- get-constrants, index: ~a" i))
-  (let* (
-         [icolset (column puzzle (to-column i))]
-             [irowset (row puzzle (to-row i))]
-             [isubsquareset (subsquare puzzle (to-subsquare i))]
-             [appeared (set-union icolset irowset isubsquareset)]
-             [remained (subtract 1-9 appeared)])
-    ;(displayln (format "constraints helper -- end -- get-constrants, get remained: ~a" remained))
-    remained))
+  (void))
 
 #|
 (set->choice set)
@@ -247,10 +210,7 @@ Complete the two helpers `get-constraints` and `set->choice`, and then modify
   that are analogous to the list functions.
 |#
 (define (set->choice set)
-  ;(displayln (format "constraints helper -- call -- set->choice, set: ~a" set))
-  (cond
-    [(set-empty? set) (next)]
-    [else (-< (set-first set) (set->choice (set-rest set)))]))
+  (void))
 
 
 ;-------------------------------------------------------------------------------
@@ -358,6 +318,8 @@ the total number of choices made when solving Sudoku boards.
               (and (= (set-count (second a)) (set-count (second b)))
                    (< (first a) (first b)))))))
 
+
+
 ;-------------------------------------------------------------------------------
 ; ★ Demos ★
 ;-------------------------------------------------------------------------------
@@ -370,7 +332,9 @@ the bottom, which start off commented-out.
 We took some puzzles from https://projecteuler.net/problem=96, but added our own
 (very easy) puzzle at the front. 
 |#
-; A puzzle file, and a function to parse it into separate puzzles.
+
+(module+ main
+  ; A puzzle file, and a function to parse it into separate puzzles.
   (define in (open-input-file "p096_sudoku.txt" #:mode 'text))
 
   ; Get the next puzzle from the file.
@@ -400,10 +364,7 @@ We took some puzzles from https://projecteuler.net/problem=96, but added our own
   
   (define all-puzzles (stream->list (puzzle-stream)))
   (define easy (first all-puzzles))
-  (define harder (second all-puzzles))
-
-(module+ main
-  )
+  (define harder (second all-puzzles)))
 
 ; Run the brute force algorithm on the "easy" puzzle.
 ; Note that we call reset-choices! so that it doesn't interfere with subsequent choices.
@@ -418,7 +379,7 @@ We took some puzzles from https://projecteuler.net/problem=96, but added our own
 
 ; Run the Task 1 algorithm on the "harder" puzzle.
 ; Constrast these two!
-(module+ main
+#;(module+ main
     (solve-with-constraints harder)
     (reset-choices!))
 
