@@ -23,7 +23,8 @@ to submit those files; we'll use our own for testing purposes).
          with-ordered-constraints-helper
          initialize-constraints
          sort-constraints
-         update-constraints)
+         update-constraints
+         )
 
 (require "streams.rkt")
 (require "stack_choice.rkt")
@@ -103,7 +104,7 @@ to submit those files; we'll use our own for testing purposes).
 ; We've provided an optional argument to turn on logging.
 ; This may be useful for debugging purposes, or to see how many steps your
 ; algorithm is taking.
-(define (vector-set vec index new-item [logging #t])
+(define (vector-set vec index new-item [logging #f])
   (when logging
     (displayln (format "Index: ~a Choice: ~a" index new-item)))
 
@@ -277,7 +278,7 @@ Your recursive helper will use this order to make choices, which should greatly 
 the total number of choices made when solving Sudoku boards.
 |#
 (define (solve-with-ordered-constraints board)
-  (void))
+  (with-ordered-constraints-helper board (initialize-constraints board)))
 
 
 #|
@@ -300,10 +301,11 @@ the total number of choices made when solving Sudoku boards.
 (define (initialize-constraints-helper board i)
   (cond
     [(>= i (vector-length board)) '()]
+    [(not (blank? board i)) (initialize-constraints-helper board (+ 1 i))]
     [else
-     (append (list (list i (get-constraints board i))) (initialize-constraints-helper board (+ 1 i)))]
-
-    ))
+        (append (list (list i (get-constraints board i)))
+                (initialize-constraints-helper board (+ 1 i)))])
+    )
 
 
 #|
@@ -324,8 +326,23 @@ the total number of choices made when solving Sudoku boards.
       though the conditions will be different.
     - Remember the basic "first and rest" recursive pattern on lists, and use it here.
 |#
-(define (with-ordered-constraints-helper board constraints)
-  (void))
+(define/match (with-ordered-constraints-helper board constraints)
+  ;no constraints
+  [(board '())
+   (if (solved? board)
+       board
+       (next))]
+  [(board (cons first-constraint rest-constraints))
+   (let*([idx (first first-constraint)]
+         [consset (second first-constraint)]
+         [choice (set->choice consset)]
+         [new-board (vector-set board idx choice)]
+         )
+     ;(displayln (format "constraints helper: continue next constraints"))
+      (with-ordered-constraints-helper new-board
+        (update-constraints rest-constraints idx choice))
+     )]
+  )
 
 
 #|
@@ -351,37 +368,89 @@ the total number of choices made when solving Sudoku boards.
   (let* ([same-col-idx (remove i (filter (lambda (x) (same-column? x i)) (range 81)))]
          [same-row-idx (remove i (filter (lambda (x) (same-row? x i)) (range 81)))]
          [same-subsquare-idx (remove i (filter (lambda (x) (same-subsquare? x i)) (range 81)))]
-         [same-all-idx (append same-col-idx same-row-idx same-subsquare-idx)]
+         [same-all-idx (append (list i) same-col-idx same-row-idx same-subsquare-idx)]
          ;the list only contain idx updated constraint
-         [updated-same-all-idx-lst (map (update-constraints-each constraints choice) same-all-idx)]
+        [updated-constraints (foldl (curry-update-constraints-each choice) constraints same-all-idx)]
          )
-    ())
+    updated-constraints)
   )
 
-;helper for each
-(define/match (update-constraints-each constraints choice)
-  [('() choice) '()]
-  [((cons first-constraint rest-constraints) choice)
-   (lambda (idx)
+;helper for each, return updated constraints
+(define/match (update-constraints-each constraints choice idx)
+  [('() choice idx) '()]
+  [((cons first-constraint rest-constraints) choice idx)
     (let*([considx (first first-constraint)]
           [consset (second first-constraint)])
-      (if (equal? idx considx)
+      ;(displayln (format "update-constraints-each: choice: ~a, idx: ~a, considx: ~a, consset: ~a" choice idx considx consset))
+       (if (equal? idx considx)
           ;we need to update
           (let ([newconsset (set-remove consset choice)])
             (if (set-empty? newconsset)
                 (next)
-                (list considx newconsset)))
-          (update-constraints-each rest-constraints choice)
+                (append (list(list considx newconsset)) (update-constraints-each rest-constraints choice idx))))
+          ;don't need to update
+          (append  (list first-constraint) (update-constraints-each rest-constraints choice idx))
           )
-      )
+      
     )]
   )
 
-;helper for update whole list
-(define/match (update-constraints-each-constraint constraint choice)
-  [(cons considx (cons consset '()) choice)
-   (if (equal? ))])
-
+(define (curry-update-constraints-each choice)
+  (lambda (idx constraints)
+    (update-constraints-each constraints choice idx))
+  )
+;for checking:
+(define harder-constraints
+  (list
+ (list 0 (set 5 4))
+ (list 1 (set 5 7 4 8))
+ (list 3 (set 9 4))
+ (list 5 (set 1 7 4))
+ (list 7 (set 5 9 7 8))
+ (list 8 (set 5 7))
+ (list 10 (set 7 4 8 2 6))
+ (list 11 (set 7 4))
+ (list 13 (set 7 4))
+ (list 15 (set 7 8))
+ (list 16 (set 7 8 2))
+ (list 18 (set 5 2))
+ (list 19 (set 5 7 2))
+ (list 22 (set 9 7))
+ (list 25 (set 5 9 3 7 2))
+ (list 26 (set 5 3 7 2))
+ (list 27 (set 5 3 4))
+ (list 28 (set 5 3 4))
+ (list 31 (set 5 3 4 6))
+ (list 34 (set 5 3 7 4 6))
+ (list 35 (set 5 3 7 4 6))
+ (list 37 (set 1 5 9 3 4 2))
+ (list 38 (set 9 4))
+ (list 39 (set 5 9 4))
+ (list 40 (set 5 9 3 4 6))
+ (list 41 (set 4))
+ (list 42 (set 1))
+ (list 43 (set 1 5 3 4 6))
+ (list 45 (set 1 5 3 4))
+ (list 46 (set 1 5 9 3 4))
+ (list 49 (set 5 9 3 4))
+ (list 52 (set 1 5 3 4))
+ (list 53 (set 5 3 4))
+ (list 54 (set 1 3 4))
+ (list 55 (set 1 3 7 4))
+ (list 58 (set 7 4 8))
+ (list 61 (set 1 7 4 8))
+ (list 62 (set 7 4))
+ (list 64 (set 1 7 4 6))
+ (list 65 (set 7 4))
+ (list 67 (set 5 7 4))
+ (list 69 (set 1 7))
+ (list 70 (set 1 7 4 6))
+ (list 72 (set 4 6))
+ (list 73 (set 9 7 4 6))
+ (list 75 (set 4))
+ (list 77 (set 7 4))
+ (list 79 (set 7 4 8 2 6))
+ (list 80 (set 7 4 2 6))))
 
 #|
 (sort-constraints constraints)
@@ -459,7 +528,7 @@ We took some puzzles from https://projecteuler.net/problem=96, but added our own
 
 ; Run the Task 1 algorithm on the "harder" puzzle.
 ; Constrast these two!
-(module+ main
+#;(module+ main
     (solve-with-constraints harder)
     (reset-choices!))
 
@@ -469,7 +538,7 @@ We took some puzzles from https://projecteuler.net/problem=96, but added our own
     (reset-choices!))
 
 ; Can you run your algorithm on all of the puzzles in the file?
-#;(module+ main
+(module+ main
     (define all-solutions
       (map (lambda (p)
              (reset-choices!)
