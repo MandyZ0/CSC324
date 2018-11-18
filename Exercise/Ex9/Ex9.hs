@@ -46,18 +46,23 @@ type Substitution = Map.Map LVar Term
 -- either not a logic variable, or an unbound logic variable (one that does
 -- not exist in the substitution).
 walk :: Term -> Substitution -> Term
-walk term substitution = undefined
+walk (TVar logicVar) substitution = 
+    do
+        nextTerm <- Map.lookup substitution logicVar
+        walk nextTerm substitution
+walk nullogvar subsitution = nullogvar
+    
 
 
 -- Sample tests: uncomment each individually.
 prop_walkExamples :: Bool
 prop_walkExamples = and [
-    --   walk true Map.empty == true
-    -- , walk (TVar v0) (Map.fromList [(v0, true), (v1, TVar v0)]) == true
-    -- , walk (TVar v1) (Map.fromList [(v0, true), (v1, TVar v0)]) == true
-    -- , walk (TVar v2) (Map.fromList [(v0, true), (v1, TVar v0)]) == TVar v2
-    -- -- Note that the inner logic variables are not looked up here.
-    -- , walk (TPair (TVar v0) (TVar v1)) (Map.fromList [(v0, true), (v1, TVar v0)]) == TPair (TVar v0) (TVar v1)
+      walk true Map.empty == true
+    , walk (TVar v0) (Map.fromList [(v0, true), (v1, TVar v0)]) == true
+    , walk (TVar v1) (Map.fromList [(v0, true), (v1, TVar v0)]) == true
+    , walk (TVar v2) (Map.fromList [(v0, true), (v1, TVar v0)]) == TVar v2
+    -- Note that the inner logic variables are not looked up here.
+    , walk (TPair (TVar v0) (TVar v1)) (Map.fromList [(v0, true), (v1, TVar v0)]) == TPair (TVar v0) (TVar v1)
     ]
     where
         true = TBool True
