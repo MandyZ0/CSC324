@@ -16,6 +16,7 @@ import Control.Monad (liftM, liftM2)
 import Test.QuickCheck (
     Property, quickCheck, oneof, sized, Arbitrary(..)
     )
+import Debug.Trace
 
 
 ------------------------------------------------------------------------------
@@ -48,8 +49,9 @@ type Substitution = Map.Map LVar Term
 walk :: Term -> Substitution -> Term
 walk (TVar logicVar) substitution = 
     do
-        nextTerm <- Map.lookup substitution logicVar
-        walk nextTerm substitution
+        case Map.lookup logicVar substitution of
+            Nothing -> (TVar logicVar)
+            Just term -> walk term substitution
 walk nullogvar subsitution = nullogvar
     
 
@@ -76,17 +78,41 @@ prop_walkExamples = and [
 -- recursive TPair nested structure.
 -- The returned Term should have no bound logic variables.
 walkDeep :: Term -> Substitution -> Term
-walkDeep term substitution = undefined
+walkDeep (TVar logicVar) substitution = 
+    do
+        case Map.lookup logicVar substitution of
+            Nothing -> (TVar logicVar)
+            Just term -> walkDeep term substitution
+
+walkDeep (TPair (TVar lvar1) (TVar lvar2)) substitution = 
+    do
+        case Map.lookup lvar1 substitution of
+            Nothing ->(TPair (TVar lvar1) (walkDeep (TVar lvar2) substitution))
+            Just term -> (TPair (walkDeep term substitution) (walkDeep (TVar lvar2) substitution))
+
+walkDeep (TPair (TVar lvar1) nullogvar) substitution = 
+    do
+        case Map.lookup lvar1 substitution of
+            Nothing ->(TPair (TVar lvar1) nullogvar)
+            Just term -> (TPair (walkDeep term substitution) nullogvar)
+
+walkDeep (TPair nullogvar (TVar lvar2)) substitution = 
+    do
+        case Map.lookup lvar2 substitution of
+            Nothing ->(TPair nullogvar (TVar lvar2))
+            Just term -> (TPair nullogvar (walkDeep term substitution))
+
+walkDeep nullogvar substitution = nullogvar
 
 
 prop_walkDeepExamples :: Bool
 prop_walkDeepExamples = and [
-    --   walkDeep true Map.empty == true
-    -- , walkDeep (TVar v0) (Map.fromList [(v0, true), (v1, TVar v0)]) == true
-    -- , walkDeep (TVar v1) (Map.fromList [(v0, true), (v1, TVar v0)]) == true
-    -- , walkDeep (TVar v2) (Map.fromList [(v0, true), (v1, TVar v0)]) == TVar v2
-    -- -- Now, the nested logic variables are looked up.
-    -- , walk (TPair (TVar v0) (TVar v1)) (Map.fromList [(v0, true), (v1, TVar v0)]) == TPair true true
+      walkDeep true Map.empty == true
+    , walkDeep (TVar v0) (Map.fromList [(v0, true), (v1, TVar v0)]) == true
+    , walkDeep (TVar v1) (Map.fromList [(v0, true), (v1, TVar v0)]) == true
+    , walkDeep (TVar v2) (Map.fromList [(v0, true), (v1, TVar v0)]) == TVar v2
+    -- Now, the nested logic variables are looked up.
+    , walkDeep (TPair (TVar v0) (TVar v1)) (Map.fromList [(v0, true), (v1, TVar v0)]) == TPair true true
     ]
     where
         true = TBool True
@@ -98,18 +124,21 @@ prop_walkDeepExamples = and [
 
 -- | Return whether the given logic variable occurs in the given term.
 occurs :: LVar -> Term -> Bool
-occurs lvar term = undefined
-
+occurs lvar (TVar v0) = (lvar == v0)
+occurs lvar (TPair (TVar v0) (TVar v1)) = (lvar == v0 || lvar == v1)
+occurs lvar (TPair (TVar v0) term) = (lvar == v0 || occurs lvar term)
+occurs lvar (TPair term (TVar v1)) = (lvar == v1 || occurs lvar term) 
+occurs lvar _ = False
 
 prop_occursExamples :: Bool
 prop_occursExamples = and [
-    --   not $ occurs v0 true
-    -- , not $ occurs v0 (TVar v1)
-    -- , occurs v1 (TVar v1)
-    -- , occurs v1 (TPair (TVar v0) (TVar v1))
-    -- , occurs v1 (TPair (TVar v2) (TPair true (TVar v1)))
-    -- , occurs v0 (TPair (TVar v0) (TPair true (TVar v1)))
-    -- , not $ occurs v2 (TPair (TVar v0) (TPair true (TVar v1)))
+      not $ occurs v0 true
+    , not $ occurs v0 (TVar v1)
+    , occurs v1 (TVar v1)
+    , occurs v1 (TPair (TVar v0) (TVar v1))
+    , occurs v1 (TPair (TVar v2) (TPair true (TVar v1)))
+    , occurs v0 (TPair (TVar v0) (TPair true (TVar v1)))
+    , not $ occurs v2 (TPair (TVar v0) (TPair true (TVar v1)))
     ]
     where
         true = TBool True
@@ -122,7 +151,11 @@ prop_occursExamples = and [
 -- | Extend the given substitution with another (LVar -> Term) mapping,
 -- but only if the logic variable does not occur in (walkDeep term sub).
 extend :: LVar -> Term -> Substitution -> Maybe Substitution
-extend lvar term sub = undefined
+extend lvar term sub = 
+    do
+        case Map.lookup lvar sub of
+            Nothing -> Just (Map.insert lvar term sub)
+            Just term -> Nothing
 
 
 ------------------------------------------------------------------------------
@@ -137,7 +170,24 @@ unify u v sub =
     let u' = walk u sub
         v' = walk v sub
     in
-        undefined
+        case (u',v') of
+            (TBool bool1,TBool bool2) -> 
+                if bool1 == bool2 then Just sub else Nothing
+            (TInt int1,TInt int2) -> 
+                if int1 == int2 then Just sub else Nothing
+            (TSymbol str1, TSymbol str2) ->
+                if str1 == str2 then Just sub else Nothing
+            (TNull, TNull) -> Just sub
+                
+            ((TVar logicVar),v') -> extend logicVar v' sub
+            (u',(TVar logicVar)) -> extend logicVar v' sub
+            ((TPair u1 u2),(TPair v1 v2)) -> 
+                do
+                    case unify u1 v1 sub of
+                        Nothing -> unify u2 v2 sub
+                        Just newsub -> unify u2 v2 newsub
+                    
+            (_,_) -> Nothing
 
 
 ------------------------------------------------------------------------------

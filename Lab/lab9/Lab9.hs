@@ -59,3 +59,10 @@ data Shape
     = Circle Float            -- ^ A circle with the given radius
     | Rectangle Float Float   -- ^ A rectangle with the given width and height
     | Square Float            -- ^ A square with the given side length
+
+instance Eq Shape where
+    Circle radius1 == Circle radius2 = radius1 == radius2
+    Rectangle width1 height1 == Rectangle width2 height2 = width1 == width2 && height1 == height2
+    Square sideLength1 ==  Square sideLength2 = sideLength1 == sideLength2
+    Square sideLength1 == Rectangle width height = sideLength1 == width && sideLength1 == height
+    _ == _ = False
