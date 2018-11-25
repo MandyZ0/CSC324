@@ -26,12 +26,13 @@ data Tree a = Tree a [Tree a]
 
 -- | Returns the sum of the numbers in the tree.
 treeSum :: Tree Int -> Int
-treeSum (Tree root subtrees) = undefined
+treeSum (Tree root []) = root
+treeSum (Tree root subtrees) = foldl (\x y-> treeSum y + x) root subtrees
 
 -- | Make Tree an instance of Functor.
 instance Functor Tree where
     fmap :: (a -> b) -> Tree a -> Tree b
-    fmap f (Tree root subtrees) = undefined
+    fmap f (Tree root subtrees) = (Tree (f root) (map (\x -> fmap f x) subtrees))
 
 
 ---------------------------------------------------------------------------------
@@ -43,7 +44,12 @@ instance Functor Tree where
 instance Foldable Tree where
     -- HINT: think of the "b" value in this type signature as the *accumulator*.
     foldr :: (a -> b -> b) -> b -> Tree a -> b
-    foldr f x (Tree root subtrees) = undefined
+    foldr f x (Tree root subtrees) = 
+        foldl (\a b -> foldr f a b) (f root x) subtrees
+        
+        
+        -- foldr (\y z -> foldr (\a b -> f b) (f root y) z) x subtrees
+        
 
 
 ---------------------------------------------------------------------------------
@@ -52,10 +58,20 @@ instance Foldable Tree where
 -- You can use built-in functions imported from Control.Monad here,
 -- and copy over work from Lab 10 (where you did something similar for lists).
 collectTreeMaybe :: Tree (Maybe a) -> Maybe (Tree a)
-collectTreeMaybe = undefined
+collectTreeMaybe (Tree (Just atypevar) [])= Just (Tree atypevar [])
+collectTreeMaybe (Tree Nothing []) = Nothing
+collectTreeMaybe (Tree Nothing subtrees) = Nothing
+collectTreeMaybe (Tree (Just atypevar) subtrees) = 
+    do
+        case sequence (map collectTreeMaybe subtrees) of
+            Nothing -> Nothing
+            Just lst -> Just (Tree atypevar lst)
 
 collectTreeM :: Monad m => Tree (m a) -> m (Tree a)
-collectTreeM = undefined
+collectTreeM (Tree ma subtrees)= 
+    (ma >>= 
+        \y -> sequence (map collectTreeM subtrees) >>=
+            \ys -> return (Tree y ys))
 
 
 ---------------------------------------------------------------------------------
