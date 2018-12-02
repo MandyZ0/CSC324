@@ -9,7 +9,7 @@ module A2Reln (
     tailo, lookupo) where
 
 -- Import data definitions and helper functions from the exercise code.
-import Ex9 (Term(..), LVar(..), Substitution, unify, walkDeep)
+import Ex9 (Term(..), LVar(..), Substitution, unify, walkDeep, extend )
 -- Import core microKanren functions from Part 1.
 import A2Core (State, emptyState,
                SusStream(SNull, SCons, SSuspended),
@@ -54,7 +54,8 @@ prop_testHeadoItem =
 
 -- | A query to heado, where *both* arguments are logic variables.
 headoOfLists :: State -> SusStream State
-headoOfLists = undefined
+headoOfLists (sub,count)= 
+    (fresh 2 (\[x,y] -> heado x y) (sub,count))
 
 
 ------------------------------------------------------------------------------
@@ -78,7 +79,7 @@ t_member item lst =
 -- for the `item` argument. Running this query should produce a stream
 -- containing all possible members of `lst`.
 memberoOfList :: Term -> (State -> SusStream State)
-memberoOfList = undefined
+memberoOfList lst= fresh 1 $ (\[item]-> membero item lst)
 
 -- | Sample test for memberoOfList for the `testList`.
 prop_testMemberoOfListSimple :: Bool
@@ -126,7 +127,7 @@ append xs ys =
 -- | Run a query to appendo for the given list `lst` to find all pairs (xs, ys)
 -- so that (append xs ys) == lst.
 appendoList :: Term -> (State -> SusStream State)
-appendoList = undefined
+appendoList lst = fresh 2 $ (\[xs,ys]-> appendo xs ys lst)
 
 -- | Sample test for appendoList.
 prop_testAppendoResult :: Bool
@@ -157,7 +158,8 @@ t_tail lst =
 
 -- | Complete the definition `tailo`.
 tailo :: Term -> Term -> (State -> SusStream State)
-tailo lst rest = undefined
+tailo lst rest = fresh 1 (\[first] ->  -- we need a new logic variable `rest`
+    (TPair first rest) === lst)
 
 -- | Run a query to tailo with the **item** being a logic variable.
 prop_testTailoItem :: Bool
@@ -218,8 +220,11 @@ lookupAssoc assoc key =
 -- the association list, key and value. It succeeds if (key, value)
 -- is in the association list.
 lookupo :: Term -> Term -> Term -> (State -> SusStream State)
-lookupo assoc key value = undefined
+lookupo assoc key value =
 
+    fresh 3 $ (\[tkey,tvalue,tassoc] ->
+        (TPair (TPair tkey tvalue) tassoc) === assoc &&&
+        (((TPair tkey tvalue) === (TPair key value)) ||| (lookupo tassoc key value)))
 
 -- | Sample tests for lookupo.
 prop_lookupo1 :: Bool
@@ -254,17 +259,17 @@ main = do
     quickCheck prop_testHeadoItem
 
     -- memberoOfList
-    -- quickCheck prop_testMemberoOfListSimple
+    quickCheck prop_testMemberoOfListSimple
 
     -- appendoList
-    -- quickCheck prop_testAppendoResult
+    quickCheck prop_testAppendoResult
 
     -- tailo
-    -- quickCheck prop_testTailoList
-    -- quickCheck prop_testTailoItem
+    quickCheck prop_testTailoList
+    quickCheck prop_testTailoItem
 
     -- lookupo
-    -- quickCheck prop_lookupo1
-    -- quickCheck prop_lookupo2
-    -- quickCheck prop_lookupo3
-    -- quickCheck prop_lookupo4
+    quickCheck prop_lookupo1
+    quickCheck prop_lookupo2
+    quickCheck prop_lookupo3
+    quickCheck prop_lookupo4

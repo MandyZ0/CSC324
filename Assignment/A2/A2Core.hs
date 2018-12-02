@@ -35,6 +35,11 @@ data SusStream a = SNull                      -- empty sequence
                  | SSuspended (SusStream a)   -- suspended SusStream
                  deriving (Show, Eq)
 
+true = TBool True
+false = TBool False               
+v0 = LVar 0
+v1 = LVar 1
+v2 = LVar 2
 ------------------------------------------------------------------------------
 -- fresh: generating logic variables with a counter
 ------------------------------------------------------------------------------
@@ -62,8 +67,10 @@ fresh n goalWithLVars (sub, count) =
 -- Returns a SusStream containing zero or one `State`, depending on whether
 -- the `unify` call returned a success or failure.
 (===) :: Term -> Term -> (State -> SusStream State)
-u === v = \(sub, counter) ->
-    undefined
+u === v = \(sub, counter) -> do
+  case unify u v sub of
+    Nothing -> SNull
+    Just newsub -> SCons (newsub, counter) SNull
 
 
 ------------------------------------------------------------------------------
@@ -92,7 +99,7 @@ goal1 ||| goal2 = \state -> sAppend (goal1 state) (SSuspended (goal2 state))
 sAppend :: SusStream a -> SusStream a -> SusStream a
 sAppend SNull s2 = s2
 sAppend (SCons x xs) s2 = SCons x (sAppend xs s2)
-sAppend (SSuspended s1) s2 = SSuspended (sAppend s2 s1)  -- Note the order
+sAppend (SSuspended s1) s2 = SSuspended (sAppend s2 s1)  -- Note the order, s2 is before s1
 
 -- | A version of concatMap for suspendable streams.
 -- This is very similar to the concatMap definition for regular lists,
@@ -110,12 +117,16 @@ sConcatMap f (SSuspended stream) = SSuspended (sConcatMap f stream)
 -- | n-ary conjunction
 -- If the input list is empty, return a goal that always fails, i.e., returns SNull.
 conj :: [State -> SusStream State] -> (State -> SusStream State)
-conj goals = undefined
+conj [] = (\state -> SNull)
+conj (x:[]) = x
+conj (x:xs) = x &&& (conj xs)
 
 -- | n-ary disjunction
 -- If the input list is empty, return a goal that always fails, i.e., returns SNull.
 disj :: [State -> SusStream State] -> (State -> SusStream State)
-disj goals = undefined
+disj [] = (\state -> SNull)
+disj (x:[]) = x
+disj (x:xs) = x ||| (disj xs)
 
 
 ------------------------------------------------------------------------------
@@ -127,7 +138,9 @@ disj goals = undefined
 -- Note that even if this function is given a `SSuspended stream`,
 -- it should still return all of the contents of that stream.
 streamToList :: SusStream a -> [a]
-streamToList stream = undefined
+streamToList SNull = []
+streamToList (SCons a as) = (a:streamToList as)
+streamToList (SSuspended as) = streamToList as
 
 --------------------------------------------------------------------------------
 -- Entry Point
@@ -145,7 +158,12 @@ emptyState = (Map.empty, 0)
 -- Note that if a logic variable is *unbound* in the State's substitution mapping,
 -- then it simply appears as itself in the returned list.
 answer :: [LVar] -> State -> [Term]
-answer lvars (sub, count) = undefined
+answer lvars (sub, count) = map (answerEach sub) lvars
+
+answerEach :: Substitution -> LVar -> Term
+answerEach sub lvar  = walkDeep (TVar lvar) sub
+
+
 
 
 --------------------------------------------------------------------------------
@@ -164,13 +182,13 @@ prop_testStreamToList =
       stream6 = SSuspended stream1
       stream7 = SSuspended stream5
   in and [
-    --    0 == (length $ streamToList stream1)
-    --  , 1 == (length $ streamToList stream2)
-    --  , 1 == (length $ streamToList stream3)
-    --  , 2 == (length $ streamToList stream4)
-    --  , 2 == (length $ streamToList stream5)
-    --  , 0 == (length $ streamToList stream6)
-    --  , 2 == (length $ streamToList stream7)
+       0 == (length $ streamToList stream1)
+     , 1 == (length $ streamToList stream2)
+     , 1 == (length $ streamToList stream3)
+     , 2 == (length $ streamToList stream4)
+     , 2 == (length $ streamToList stream5)
+     , 0 == (length $ streamToList stream6)
+     , 2 == (length $ streamToList stream7)
       ]
 
 -- | Tests for answer (combined using the `and` function).
@@ -183,9 +201,9 @@ prop_testAnswer =
         false = TBool False
         state = (Map.fromList [(v0, true), (v1, TPair false (TVar v0))], 2)
     in and [
-    --   [TVar v0] == answer [v0] emptyState
-    -- , [true] == answer [v0] state
-    -- , [true, TPair false true] == answer [v0, v1] state
+      [TVar v0] == answer [v0] emptyState
+    , [true] == answer [v0] state
+    , [true, TPair false true] == answer [v0, v1] state -- need to run sub recursively!
     ]
 
 -- | Test the logic program `x === TInt 1`.
@@ -342,23 +360,23 @@ main = do
     -- You can remove this line as you uncomment the tests below.
     return ()
     -- helper functions: streamToList, answer
-    -- quickCheck prop_testStreamToList
-    -- quickCheck prop_testAnswer
+    quickCheck prop_testStreamToList
+    quickCheck prop_testAnswer
 
     -- equality tests
-    -- quickCheck prop_testEqualitySimple
-    -- quickCheck prop_testEqualitySingleTerm
-    -- quickCheck prop_testEqualityImpossible
-    -- quickCheck prop_testEqualityImpossibleTerm
-    -- quickCheck prop_testEqualityUnbound
-    -- quickCheck prop_testEqualityTwoLVars
-    -- quickCheck prop_testEqualityCyclic
+    quickCheck prop_testEqualitySimple
+    quickCheck prop_testEqualitySingleTerm
+    quickCheck prop_testEqualityImpossible
+    quickCheck prop_testEqualityImpossibleTerm
+    quickCheck prop_testEqualityUnbound
+    quickCheck prop_testEqualityTwoLVars
+    quickCheck prop_testEqualityCyclic
 
     -- conj/disj
-    -- quickCheck prop_testConjTrue
-    -- quickCheck prop_testConjFalse
-    -- quickCheck prop_testDisj
-    -- quickCheck prop_testDisjDuplicate
+    quickCheck prop_testConjTrue
+    quickCheck prop_testConjFalse
+    quickCheck prop_testDisj
+    quickCheck prop_testDisjDuplicate
 
     -- satisfiability
-    -- quickCheck prop_testSAT
+    quickCheck prop_testSAT

@@ -86,12 +86,31 @@ walkDeep (TPair (TVar lvar1) (TVar lvar2)) substitution =
     do
         case Map.lookup lvar1 substitution of
             Nothing ->(TPair (TVar lvar1) (walkDeep (TVar lvar2) substitution))
+            --Just (TVar exlogicVar) -> (TPair (TVar exlogicVar) (walkDeep (TVar lvar2) substitution))
             Just term -> (TPair (walkDeep term substitution) (walkDeep (TVar lvar2) substitution))
+
+walkDeep (TPair (TPair term1 term2) (TPair term3 term4)) substitution =  
+    TPair (walkDeep (TPair term1 term2) substitution) (walkDeep (TPair term3 term4) substitution)
+
+walkDeep (TPair (TVar lvar1) (TPair term1 term2)) substitution = 
+    do
+        case Map.lookup lvar1 substitution of
+            Nothing ->(TPair (TVar lvar1) (walkDeep (TPair term1 term2) substitution))
+            --Just (TVar exlogicVar) -> (TPair (TVar exlogicVar) (walkDeep (TPair term1 term2) substitution))
+            Just term -> (TPair (walkDeep term substitution) (walkDeep (TPair term1 term2) substitution))
+
+walkDeep (TPair (TPair term1 term2) (TVar lvar2)) substitution = 
+    do
+        case Map.lookup lvar2 substitution of
+            Nothing ->(TPair (walkDeep (TPair term1 term2) substitution) (TVar lvar2) )
+            --Just (TVar exlogicVar) -> (TPair (walkDeep (TPair term1 term2) substitution) (TVar exlogicVar) )
+            Just term -> (TPair (walkDeep (TPair term1 term2) substitution)(walkDeep term substitution))
 
 walkDeep (TPair (TVar lvar1) nullogvar) substitution = 
     do
         case Map.lookup lvar1 substitution of
             Nothing ->(TPair (TVar lvar1) nullogvar)
+            --Just (TVar exlogicVar) -> (TPair (TVar exlogicVar) nullogvar)
             Just term -> (TPair (walkDeep term substitution) nullogvar)
 
 walkDeep (TPair nullogvar (TVar lvar2)) substitution = 
@@ -149,11 +168,41 @@ prop_occursExamples = and [
 -- | Extend the given substitution with another (LVar -> Term) mapping,
 -- but only if the logic variable does not occur in (walkDeep term sub).
 extend :: LVar -> Term -> Substitution -> Maybe Substitution
+extend lvar (TPair term1 term2) sub = 
+    let
+        u = walkDeep term1 sub
+        v = walkDeep term2 sub
+    in
+        case (u,v) of
+            ((TVar logicVar1),(TVar logicVar2)) -> do
+                if lvar == logicVar1 || lvar == logicVar2
+                    then Nothing
+                    else Just (Map.insert lvar (TPair term1 term2) sub) -- succeed link, need to extend
+            ((TVar logicVar1),v) ->  do
+                if lvar == logicVar1
+                    then Nothing
+                    else Just (Map.insert lvar (TPair term1 term2) sub)
+            (u,(TVar logicVar2)) ->  do
+                if lvar == logicVar2
+                    then Nothing
+                    else Just (Map.insert lvar (TPair term1 term2) sub)
+            (u,v) -> do
+                case walkDeep (TVar lvar) sub of 
+                    (TVar lvar1) -> 
+                        if lvar1 == lvar
+                            then Just (Map.insert lvar (TPair term1 term2) sub)
+                            else Just sub
+                        
+                    _ -> Just sub
+
+                    
 extend lvar term sub = 
-    do
-        case Map.lookup lvar sub of
-            Nothing -> Just (Map.insert lvar term sub)
-            Just term -> Nothing
+    let u = walkDeep (TVar lvar) sub 
+    in
+        if u == (TVar lvar)
+            then Just (Map.insert lvar term sub) else Just sub
+
+
 
 
 ------------------------------------------------------------------------------
@@ -165,8 +214,8 @@ extend lvar term sub =
 -- or use case expressions: http://learnyouahaskell.com/syntax-in-functions#case-expressions.
 unify :: Term -> Term -> Substitution -> Maybe Substitution
 unify u v sub =
-    let u' = walk u sub
-        v' = walk v sub
+    let u' = walkDeep u sub
+        v' = walkDeep v sub
     in
         case (u',v') of
             (TBool bool1,TBool bool2) -> 
@@ -177,14 +226,15 @@ unify u v sub =
                 if str1 == str2 then Just sub else Nothing
             (TNull, TNull) -> Just sub
                 
+            ((TVar logicVar1),(TVar logicVar2)) ->Just sub
             ((TVar logicVar),v') -> extend logicVar v' sub
-            (u',(TVar logicVar)) -> extend logicVar v' sub
+            (u',(TVar logicVar)) -> extend logicVar u' sub
             ((TPair u1 u2),(TPair v1 v2)) -> 
                 do
                     case unify u1 v1 sub of
-                        Nothing -> unify u2 v2 sub
+                        Nothing -> Nothing
                         Just newsub -> unify u2 v2 newsub
-                    
+            
             (_,_) -> Nothing
 
 
