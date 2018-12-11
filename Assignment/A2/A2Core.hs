@@ -273,6 +273,7 @@ prop_testEqualityCyclic =
 --------------------------------------------------------------------------------
 
 -- | Tests for n-ary conjunctions that do have a solution.
+-- Here I test how to use vim!!! using IPAD, that's a great, interesting experience
 prop_testConjTrue:: Bool
 prop_testConjTrue =
     let result1 = run (fresh 1 (\[x] -> conj [x === TInt 1,
