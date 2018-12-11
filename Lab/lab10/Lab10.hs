@@ -75,4 +75,12 @@ collectM [] = return []
 collectM (a:as) = 
     (a >>=
         \y -> collectM as >>=
-            \ys ->return (y:ys)
+            \ys ->return (y:ys))
+
+
+collectMFold :: Monad m => [m a] -> m [a]
+collectMFold [] = return []
+collectMFold (a:as) = 
+    foldl (\returntype initialtype -> initialtype >>= 
+                                        \x -> returntype >>= 
+                                            \ys -> return (ys ++ [x])) (a >>= \x -> return [x]) as
