@@ -72,10 +72,14 @@ applyBinaryM f a b =
 
 collectM :: Monad m => [m a] -> m [a]
 collectM [] = return []
-collectM (a:as) = 
-    (a >>=
-        \y -> collectM as >>=
-            \ys ->return (y:ys))
+collectM (a:as) = do
+    x <- a
+    xs <- collectM as
+    return (x:xs)
+
+    -- (a >>=
+    --     \y -> collectM as >>=
+    --         \ys ->return (y:ys))
 
 
 collectMFold :: Monad m => [m a] -> m [a]

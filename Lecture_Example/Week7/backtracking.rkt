@@ -56,3 +56,14 @@
       (-< start)
       (-< start
           (num-between (+ start 1) end))))
+
+(define (triples n)
+  (list (num-between 1 n)
+        (num-between 1 n)
+        (num-between 1 n)))
+
+(define/match (map-< f lst)
+  [(f '()) '()]
+  [(f (cons x xs))
+   (f (-< x (map-< f xs)))
+  ])

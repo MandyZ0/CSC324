@@ -1,0 +1,1 @@
+("7.0" ("ff71c1609180b554346be9e674cfc45a617da271" . "a6ec60a32a783869ff33fa4f089734d21d0d15ad") #"/Users/zhangmengdi/gitrepo/324/CSC324/Lecture_Example/week7/stack_choice.rkt" (collects #"errortrace" #"errortrace-key.rkt") (collects #"racket" #"main.rkt") (collects #"racket" #"runtime-config.rkt"))
